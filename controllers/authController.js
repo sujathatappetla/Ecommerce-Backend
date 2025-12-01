@@ -2,6 +2,8 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -39,39 +41,41 @@ export const login = async (req, res) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: isProduction, // 🔥 true only on Render, false on localhost
+      sameSite: isProduction ? "none" : "lax", 
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({ message: "Login successful", token, user });
+    res.json({ message: "Login successful", user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
-export const logout = async (req, res) => {
+
+export const logout = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false, 
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
   });
 
-  return res.json({ message: "Logged out successfully" });
+  res.json({ message: "Logged out successfully" });
 };
+
 export const getMe = async (req, res) => {
   try {
     const token = req.cookies.token;
 
-    if (!token) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
+    if (!token) return res.status(401).json({ message: "Not authenticated" });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await User.findById(decoded.id).select("-password");
 
     res.json({ user });
-
-  } catch (error) {
+  } catch {
     res.status(401).json({ message: "Invalid token" });
   }
 };
